@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plataforma de Treinamento de Relatórios de Enfermagem</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }
+        body { background-color: #f0f4f8; color: #333; padding: 20px; }
+        
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        header { background-color: #0284c7; color: white; padding: 20px; border-radius: 10px; text-align: center; margin-bottom: 20px; }
+        
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; }
+        .tab-btn { padding: 12px 20px; font-weight: bold; border: none; background: none; cursor: pointer; color: #64748b; font-size: 1em; }
+        .tab-btn.active { color: #0284c7; border-bottom: 3px solid #0284c7; }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .item-list { list-style: none; margin: 20px 0; }
+        .item-list li { background: #e0f2fe; border: 2px solid #0284c7; color: #0369a1; padding: 10px 15px; margin: 6px 0; border-radius: 8px; cursor: grab; font-weight: bold; }
+        .item-list li.dragging { opacity: 0.5; background: #bae6fd; }
+
+        .card { background: #f8fafc; border-left: 5px solid #0284c7; padding: 15px; margin-bottom: 15px; border-radius: 4px; }
+        
+        textarea { width: 100%; height: 160px; padding: 12px; border: 2px solid #cbd5e1; border-radius: 8px; font-size: 1em; margin-top: 10px; }
+        
+        .btn { background-color: #059669; color: white; border: none; padding: 12px 20px; font-size: 1em; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; margin-top: 10px; }
+        .btn:hover { background-color: #047857; }
+        .btn-secondary { background-color: #0284c7; margin-top: 5px; }
+
+        .ai-response { margin-top: 20px; padding: 20px; border-radius: 8px; background-color: #f1f5f9; border: 1px solid #cbd5e1; white-space: pre-wrap; line-height: 1.6; }
+        .loading { display: none; text-align: center; color: #0284c7; font-weight: bold; margin-top: 15px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>🩺 Treinador de Relatório de Enfermagem</h1>
+            <p>Aprenda a sequência e a redação técnica do prontuário</p>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('tab1')">🎮 Jogo 1: Ordem da Sequência</button>
+            <button class="tab-btn" onclick="switchTab('tab2')">🤖 Jogo 2: Redação com Correção de IA</button>
+        </div>
+
+        <!-- ABA 1: ARRASTAR E SOLTAR -->
+        <div id="tab1" class="tab-content active">
+            <p><strong>Desafio:</strong> Arraste e ordene os itens abaixo na sequência padronizada exata para o relatório (1 a 13):</p>
+            <ul class="item-list" id="draggable-list"></ul>
+            <button class="btn" onclick="checkOrder()">Verificar Sequência</button>
+            <div id="order-result" style="margin-top: 15px; font-weight: bold; text-align: center;"></div>
+        </div>
+
+        <!-- ABA 2: SIMULADOR DE IA -->
+        <div id="tab2" class="tab-content">
+            <div class="card">
+                <h3 id="case-title">Caso Clínico 1: Paciente João (Leito 12)</h3>
+                <p id="case-description">
+                    O paciente João, leito 12, está acordado e consciente. Consegue andar sozinho e tomou banho no chuveiro. Apresenta pressão e temperatura normais. O pulso na ponta dos dedos está normal e rápido (perfusão < 2s). A pele está sem feridas. Está com soro no braço direito sem inchaço. Comeu toda a refeição. Barriga está macia e sem dor. Não tem curativos. Reclama de dor de cabeça leve. Foi ao banheiro e urinou normal. Foi orientado a chamar a enfermagem se a dor piorar.
+                </p>
+            </div>
+
+            <h3>Sua Redação Técnica:</h3>
+            <textarea id="studentReport" placeholder="Escreva aqui seu relatório aplicando os termos técnicos e mantendo a ordem correta..."></textarea>
+
+            <button class="btn" onclick="analyzeWithAI()">✨ Analisar Relatório com IA</button>
+            <button class="btn btn-secondary" onclick="generateNewCase()">🎲 Gerar Novo Caso com IA</button>
+
+            <div id="loading" class="loading">⏳ A IA está processando... Aguarde!</div>
+            <div id="aiResponse" class="ai-response" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // CONFIGURAÇÃO DA CHAVE DA API
+        const GEMINI_API_KEY = "AQ.Ab8RN6Kse7uPu6AehFrhZOm4dw2BDHPJevKZwE3dxMOXETBQDw";
+
+        // GERENCIAMENTO DE ABAS
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // LÓGICA DO DRAG & DROP
+        const correctOrder = [
+            "1. Neurológico", "2. Movimentação", "3. Banho", "4. SSVV", 
+            "5. Perfusão Capilar", "6. Pele", "7. Acesso venoso", "8. Alimentação", 
+            "9. Abdome", "10. Curativo", "11. Queixas", "12. Eliminações", "13. Orientações"
+        ];
+
+        const list = document.getElementById('draggable-list');
+
+        function initDragGame() {
+            const shuffled = [...correctOrder].sort(() => Math.random() - 0.5);
+            list.innerHTML = '';
+            shuffled.forEach(item => {
+                const li = document.createElement('li');
+                li.setAttribute('draggable', true);
+                li.textContent = item;
+                list.appendChild(li);
+            });
+            addDragEvents();
+        }
+
+        function addDragEvents() {
+            const items = list.querySelectorAll('li');
+            items.forEach(item => {
+                item.addEventListener('dragstart', () => item.classList.add('dragging'));
+                item.addEventListener('dragend', () => item.classList.remove('dragging'));
+            });
+
+            list.addEventListener('dragover', e => {
+                e.preventDefault();
+                const afterElement = [...list.querySelectorAll('li:not(.dragging)')].reduce((closest, child) => {
+                    const box = child.getBoundingClientRect();
+                    const offset = e.clientY - box.top - box.height / 2;
+                    return (offset < 0 && offset > closest.offset) ? { offset: offset, element: child } : closest;
+                }, { offset: Number.NEGATIVE_INFINITY }).element;
+
+                const draggable = document.querySelector('.dragging');
+                if (afterElement == null) list.appendChild(draggable);
+                else list.insertBefore(draggable, afterElement);
+            });
+        }
+
+        function checkOrder() {
+            const current = [...list.querySelectorAll('li')].map(li => li.textContent);
+            const res = document.getElementById('order-result');
+            const ok = current.every((val, index) => val === correctOrder[index]);
+
+            if (ok) {
+                res.style.color = '#059669';
+                res.textContent = '🎉 Perfeito! Todos os 13 pontos estão na ordem exata!';
+            } else {
+                res.style.color = '#dc2626';
+                res.textContent = '❌ A ordem ainda tem deslizes. Ajuste e tente novamente!';
+            }
+        }
+
+        // CHAMADA PARA A API DO GEMINI (ROTA ATUALIZADA)
+        async function callGemini(promptText) {
+            if (GEMINI_API_KEY === "COLE_SUA_CHAVE_AQUI" || !GEMINI_API_KEY) {
+                alert("Por favor, cole sua chave de API na linha 80 do código!");
+                return null;
+            }
+
+            // Endpoint v1beta ajustado para a família de modelos Gemini 1.5/2.0
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: promptText }] }]
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error?.message || "Erro desconhecido na API.");
+                }
+
+                return data.candidates[0].content.parts[0].text;
+            } catch (err) {
+                alert("Erro ao conectar com a IA: " + err.message);
+                return null;
+            }
+        }
+
+        async function analyzeWithAI() {
+            const reportText = document.getElementById('studentReport').value.trim();
+            const caseDesc = document.getElementById('case-description').textContent;
+
+            if (!reportText) {
+                alert("Escreva seu relatório antes de mandar analisar!");
+                return;
+            }
+
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('aiResponse').style.display = 'none';
+
+            const systemPrompt = `
+            Você é um professor experiente e didático de enfermagem.
+            Avalie o relatório escrito por um estudante de enfermagem com base no caso clínico fornecido.
+
+            Caso Clínico:
+            "${caseDesc}"
+
+            Relatório do Aluno:
+            "${reportText}"
+
+            Regras de avaliação:
+            1. Verifique se seguiu a ordem exata dos 13 passos: 1. Neurológico, 2. Movimentação, 3. Banho, 4. SSVV, 5. Perfusão Capilar, 6. Pele, 7. Acesso venoso, 8. Alimentação, 9. Abdome, 10. Curativo, 11. Queixas, 12. Eliminações, 13. Orientações.
+            2. Analise os termos técnicos (ex: uso de 'cefaleia' em vez de 'dor de cabeça', 'deambulando' em vez de 'andando', etc.).
+            
+            Formate a resposta em marcadores claros:
+            - Nota (0 a 10)
+            - Pontos Fortes
+            - Termos Técnicos a Corrigir
+            - Avaliação da Ordem (1 a 13)
+            - Exemplo de Versão Ideal
+            `;
+
+            const aiReply = await callGemini(systemPrompt);
+            document.getElementById('loading').style.display = 'none';
+
+            if (aiReply) {
+                const box = document.getElementById('aiResponse');
+                box.style.display = 'block';
+                box.innerHTML = aiReply.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            }
+        }
+
+        async function generateNewCase() {
+            document.getElementById('loading').style.display = 'block';
+
+            const prompt = `Crie um cenário clínico simulado e curto de um paciente internado (usando linguagem simples/leiga), para um estudante de enfermagem montar um relatório. Forneça o título no formato 'Caso: Nome do Paciente (Leito X)' e a descrição em seguida.`;
+
+            const aiReply = await callGemini(prompt);
+            document.getElementById('loading').style.display = 'none';
+
+            if (aiReply) {
+                document.getElementById('case-title').textContent = "Novo Caso Gerado pela IA";
+                document.getElementById('case-description').textContent = aiReply;
+                document.getElementById('studentReport').value = '';
+                document.getElementById('aiResponse').style.display = 'none';
+            }
+        }
+
+        initDragGame();
+    </script>
+</body>
+</html>
